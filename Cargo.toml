@@ -3,3 +3,8 @@
 name = "mutant"
 version = "0.0.1"
 authors = ["Geoffroy Couprie <geo.couprie@gmail.com>"]
+
+
+[lib]
+name = "mutant"
+crate-type = ["dylib"]
