@@ -1,5 +1,6 @@
 #![feature(plugin_registrar)]
 #![feature(box_syntax)]
+#![feature(quote)]
 #![crate_type="dylib"]
 //#![crate_name="rewrite"]
 
@@ -23,14 +24,14 @@ use rustc::plugin::Registry;
 struct Mutant;
 
 impl Mutant {
-  fn mutate(&self, item: P<ast::Item>) -> P<ast::Item> {
+  fn mutate(&self, ecx: &mut ExtCtxt, item: P<ast::Item>) -> P<ast::Item> {
     //for attr in item.attrs.iter() {
     //  println!("attr: {:?}", attr);
     //}
-    item.map(|i| self.mutate_item(i))
+    item.map(|i| self.mutate_item(ecx, i))
   }
 
-  fn mutate_item(&self, ast::Item {id, ident, attrs, node, vis, span}: ast::Item) -> ast::Item {
+  fn mutate_item(&self, ecx: &mut ExtCtxt, ast::Item {id, ident, attrs, node, vis, span}: ast::Item) -> ast::Item {
     println!("ident: {}", ident.name.as_str());
 
     ast::Item {
@@ -38,17 +39,17 @@ impl Mutant {
       ident: ident,
       attrs: attrs,
       //node: self.mutate_item_underscore(node, span),
-      node: self.mutate_item_underscore(node, span, ident .name.as_str() == "forty_two"),
+      node: self.mutate_item_underscore(ecx, node, span, ident .name.as_str() == "forty_two"),
       vis:   vis,
       span: span
     }
   }
 
-  fn mutate_item_underscore(&self, i: ast::Item_, span: Span, doit: bool) -> ast::Item_ {
+  fn mutate_item_underscore(&self, ecx: &mut ExtCtxt, i: ast::Item_, span: Span, doit: bool) -> ast::Item_ {
     match i {
       ItemMod(m) => {
         println!("is a mod");
-        ItemMod(self.mutate_mod(m))
+        ItemMod(self.mutate_mod(ecx, m))
       },
       ItemFn(decl, unsafety, abi, generics, body) => {
         if !doit {
@@ -61,7 +62,7 @@ impl Mutant {
 
         let new_decl = P(FnDecl{ inputs: decl.inputs.clone(), output: new_decl_output, variadic: decl.variadic });
 
-        let b = body.map(|b| self.mutate_block(b));
+        let b = body.map(|b| self.mutate_block(ecx, b));
         println!("decl2: {:?}", new_decl.output);
         println!("body2: {:?}", b);
         ItemFn(
@@ -79,14 +80,14 @@ impl Mutant {
     }
   }
 
-  fn mutate_mod(&self, Mod{inner, items} : Mod) -> Mod {
+  fn mutate_mod(&self, ecx: &mut ExtCtxt, Mod{inner, items} : Mod) -> Mod {
     Mod {
         inner: inner,
-        items: items.into_iter().map(|i| self.mutate(i)).collect()
+        items: items.into_iter().map(|i| self.mutate(ecx, i)).collect()
     }
   }
 
-  fn mutate_block(&self, Block {stmts, expr, id, rules,span}: Block) -> Block {
+  fn mutate_block(&self, ecx: &mut ExtCtxt, Block {stmts, expr, id, rules,span}: Block) -> Block {
     let new_span = Span {
       lo:      span.lo,
       hi:      span.hi,
@@ -94,8 +95,8 @@ impl Mutant {
     };
 
     let mut new_stmts: Vec<P<Stmt>> = Vec::new();
-    new_stmts.push(P(Spanned {
-      node: StmtSemi(P(Expr {
+    let new_expr = quote_expr!(ecx, return 42);
+    /*let new_expr = P(Expr {
               id: id,
               node: ExprRet(Some(P(Expr {
                 id: id,
@@ -106,7 +107,11 @@ impl Mutant {
                 span: span
               }))),
               span: span,
-            }), id),
+            });*/
+    new_stmts.push(P(Spanned {
+      node: StmtSemi(
+              new_expr,
+              id),
             span: span}
             ));
     Block {
@@ -120,8 +125,10 @@ impl Mutant {
 }
 
 impl ItemModifier for Mutant {
-    fn expand(&self, _: &mut ExtCtxt, span: Span, meta: &ast::MetaItem, item: P<ast::Item>) -> P<ast::Item> {
-      self.mutate(item)
+    fn expand(&self, ecx: &mut ExtCtxt, span: Span, meta: &ast::MetaItem, item: P<ast::Item>) -> P<ast::Item> {
+      let a: P<syntax::ast::Expr> = quote_expr!(ecx, return 42);
+      println!("token: {:?}", a);
+      self.mutate(ecx, item)
     }
 }
 
