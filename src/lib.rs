@@ -19,7 +19,10 @@ use syntax::ast::Lit_::*;
 use syntax::ast::LitIntType::*;
 use syntax::ast::UintTy::*;
 use syntax::ast::{Mod,FnDecl,Block,Stmt,Expr};
+use syntax::print::pprust;
 use rustc::plugin::Registry;
+use syntax::parse::{new_parse_sess,new_parser_from_source_str};
+use syntax::parse::parser::Parser;
 
 struct Mutant;
 
@@ -96,6 +99,8 @@ impl Mutant {
 
     let mut new_stmts: Vec<P<Stmt>> = Vec::new();
     let new_expr = quote_expr!(ecx, return 42);
+    //new_expr.map(|e| { println!("replacing expression with {}", pprust::expr_to_string(&e.clone())); e });
+    println!("replacing expression with '{}'", pprust::expr_to_string(&new_expr));
     /*let new_expr = P(Expr {
               id: id,
               node: ExprRet(Some(P(Expr {
@@ -128,6 +133,15 @@ impl ItemModifier for Mutant {
     fn expand(&self, ecx: &mut ExtCtxt, span: Span, meta: &ast::MetaItem, item: P<ast::Item>) -> P<ast::Item> {
       let a: P<syntax::ast::Expr> = quote_expr!(ecx, return 42);
       println!("token: {:?}", a);
+
+     let ps = new_parse_sess();
+     let mut parser = new_parser_from_source_str(&ps,
+                                    Vec::new(),
+                                    "MUTE".to_string(),
+                                    "return 1234".to_string());
+     let ex = parser.parse_expr();
+     println!("EX: {:?}", ex);
+
       self.mutate(ecx, item)
     }
 }
