@@ -6,22 +6,16 @@
 
 extern crate syntax;
 extern crate rustc;
+extern crate rustc_plugin;
 
 use syntax::{ast, parse};
 use syntax::codemap::{Span,BytePos,ExpnId,Spanned};
-use syntax::ext::base::{ExtCtxt, ItemModifier, Modifier};
+use syntax::ext::base::{Annotatable, ExtCtxt, MultiItemModifier, Modifier};
 use syntax::ptr::P;
-use syntax::ast::Item_::*;
-use syntax::ast::FunctionRetTy::*;
-use syntax::ast::Expr_::*;
-use syntax::ast::Stmt_::*;
-use syntax::ast::Lit_::*;
-use syntax::ast::LitIntType::*;
-use syntax::ast::UintTy::*;
-use syntax::ast::{Mod,FnDecl,Block,Stmt,Expr};
+use syntax::ast::{Block, Expr, ExprKind, FnDecl, FunctionRetTy, ItemKind, LitKind, LitIntType, Mod, Stmt, StmtKind, UintTy};
 use syntax::print::pprust;
-use rustc::plugin::Registry;
-use syntax::parse::{new_parse_sess,new_parser_from_source_str};
+use rustc_plugin::registry::Registry;
+use syntax::parse::{ParseSess, new_parser_from_source_str};
 use syntax::parse::parser::Parser;
 
 struct Mutant;
@@ -48,27 +42,27 @@ impl Mutant {
     }
   }
 
-  fn mutate_item_underscore(&self, ecx: &mut ExtCtxt, i: ast::Item_, span: Span, doit: bool) -> ast::Item_ {
+  fn mutate_item_underscore(&self, ecx: &mut ExtCtxt, i: ast::ItemKind, span: Span, doit: bool) -> ast::ItemKind {
     match i {
-      ItemMod(m) => {
+      ItemKind::Mod(m) => {
         println!("is a mod");
-        ItemMod(self.mutate_mod(ecx, m))
+        ItemKind::Mod(self.mutate_mod(ecx, m))
       },
-      ItemFn(decl, unsafety, abi, generics, body) => {
+      ItemKind::Fn(decl, unsafety, abi, generics, body) => {
         if !doit {
-          return ItemFn(decl, unsafety, abi, generics, body)
+          return ItemKind::Fn(decl, unsafety, abi, generics, body)
         }
         println!("got a function");
         println!("decl1: {:?}", decl.output);
         println!("body1: {:?}", body);
-        let new_decl_output = DefaultReturn(span);
+        let new_decl_output = FunctionRetTy::Default(span);
 
         let new_decl = P(FnDecl{ inputs: decl.inputs.clone(), output: new_decl_output, variadic: decl.variadic });
 
         let b = body.map(|b| self.mutate_block(ecx, b));
         println!("decl2: {:?}", new_decl.output);
         println!("body2: {:?}", b);
-        ItemFn(
+        ItemKind::Fn(
           decl, //new_decl,
           unsafety,
           abi,
@@ -76,7 +70,7 @@ impl Mutant {
           b          //body.map(|b| self.mutate_block(b))
         )
       },
-      a          => {
+      a => {
         println!("is not a mod");
         a
       }
@@ -114,7 +108,7 @@ impl Mutant {
               span: span,
             });*/
     new_stmts.push(P(Spanned {
-      node: StmtSemi(
+      node: StmtKind::Semi(
               new_expr,
               id),
             span: span}
@@ -129,21 +123,21 @@ impl Mutant {
   }
 }
 
-impl ItemModifier for Mutant {
-    fn expand(&self, ecx: &mut ExtCtxt, span: Span, meta: &ast::MetaItem, item: P<ast::Item>) -> P<ast::Item> {
-      let a: P<syntax::ast::Expr> = quote_expr!(ecx, return 42);
-      println!("token: {:?}", a);
+impl MultiItemModifier for Mutant {
+  fn expand(&self, ecx: &mut ExtCtxt, span: Span, meta: &ast::MetaItem, item: Annotatable) -> Annotatable {
+    let a: P<Expr> = quote_expr!(ecx, return 42);
+    println!("token: {:?}", a);
 
-     let ps = new_parse_sess();
-     let mut parser = new_parser_from_source_str(&ps,
-                                    Vec::new(),
-                                    "MUTE".to_string(),
-                                    "return 1234".to_string());
-     let ex = parser.parse_expr();
-     println!("EX: {:?}", ex);
+    let ps = ParseSess::new();
+    let mut parser = new_parser_from_source_str(&ps,
+                                  Vec::new(),
+                                  "MUTE".to_string(),
+                                  "return 1234".to_string());
+    let ex = parser.parse_expr();
+    println!("EX: {:?}", ex);
 
-      self.mutate(ecx, item)
-    }
+    self.mutate(ecx, item)
+  }
 }
 
 #[plugin_registrar]
